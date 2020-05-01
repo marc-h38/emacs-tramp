@@ -139,23 +139,28 @@ Return DEFAULT if not set."
 	(tramp-run-real-handler #'directory-file-name (list file))
 	(tramp-file-name-hop key) nil)
   (let* ((hash (tramp-get-hash-table key))
-	 (value (when (hash-table-p hash) (gethash property hash))))
-    (if ;; We take the value only if there is any, and
+	 (cached (when (hash-table-p hash) (gethash property hash)))
+	 (value default)
+	 (use-cache nil))
+
+    (when ;; We take the value only if there is any, and
 	;; `remote-file-name-inhibit-cache' indicates that it is still
 	;; valid.  Otherwise, DEFAULT is set.
-	(and (consp value)
+	(and (consp cached)
 	     (or (null remote-file-name-inhibit-cache)
 		 (and (integerp remote-file-name-inhibit-cache)
 		      (time-less-p
 		       nil
-		       (time-add (car value) remote-file-name-inhibit-cache)))
+		       (time-add (car cached) remote-file-name-inhibit-cache)))
 		 (and (consp remote-file-name-inhibit-cache)
 		      (time-less-p
-		       remote-file-name-inhibit-cache (car value)))))
-	(setq value (cdr value))
-      (setq value default))
+		       remote-file-name-inhibit-cache (car cached)))))
+      (setq value (cdr cached))
+      (setq use-cache t))
 
-    (tramp-message key 8 "%s %s %s" file property value)
+    (tramp-message key 8 "%s %s inhibit: %s; cache used: %s; cached at: %s; return: %s"
+                   file property remote-file-name-inhibit-cache use-cache
+                   (when (consp cached) (car cached)) value)
     (when (>= tramp-verbose 10)
       (let* ((var (intern (concat "tramp-cache-get-count-" property)))
 	     (val (or (numberp (bound-and-true-p var))
